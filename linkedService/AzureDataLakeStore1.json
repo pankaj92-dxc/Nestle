@@ -1,0 +1,16 @@
+{
+	"name": "AzureDataLakeStore1",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"annotations": [],
+		"type": "AzureDataLakeStore",
+		"typeProperties": {
+			"dataLakeStoreUri": "https://dtcdatalakegen1.azuredatalakestore.net/webhdfs/v1",
+			"servicePrincipalId": "694a2cbf-cfa8-4474-8858-e4821943eb63",
+			"tenant": "93f33571-550f-43cf-b09f-cd331338d086",
+			"subscriptionId": "047ae087-7d35-4c57-8fe9-7a442cc9cf16",
+			"resourceGroupName": "DXC_LABS",
+			"encryptedCredential": "ew0KICAiVmVyc2lvbiI6ICIyMDE3LTExLTMwIiwNCiAgIlByb3RlY3Rpb25Nb2RlIjogIktleSIsDQogICJTZWNyZXRDb250ZW50VHlwZSI6ICJQbGFpbnRleHQiLA0KICAiQ3JlZGVudGlhbElkIjogIlBDQURGXzkyYTFlOTYxLWNmNDUtNDE2Yy05ODIyLWM5MzRkMTQwM2VkYiINCn0="
+		}
+	}
+}

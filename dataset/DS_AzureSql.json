@@ -1,0 +1,30 @@
+{
+	"name": "DS_AzureSql",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureDBconn",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"TableName": {
+				"type": "string"
+			},
+			"SP_For_upsert": {
+				"type": "string"
+			},
+			"SP_Table_Type": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().TableName",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

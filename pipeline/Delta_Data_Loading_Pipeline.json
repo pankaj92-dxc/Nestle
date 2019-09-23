@@ -1,0 +1,245 @@
+{
+	"name": "Delta_Data_Loading_Pipeline",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetConfig",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": "SELECT * FROM dbo.config_ds WHERE\nLoadthisTable='Y'"
+					},
+					"dataset": {
+						"referenceName": "AzureSqlConfig",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "LoadTables",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetConfig",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetConfig').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "GetMaxLoadTime",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT MAX(@{item().WatermarkColumn}) as maxd\nFROM @{item().source_table}",
+										"type": "Expression"
+									}
+								},
+								"dataset": {
+									"referenceName": "Source",
+									"type": "DatasetReference"
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "CopyTables",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "GetMaxLoadTime",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT \n @{item().columns} FROM @{item().source_table} \n \nWHERE \n \n@{item().WatermarkColumn} > \n'@{item().WatermarkValue}'\nAND\n@{item().WatermarkColumn} <=\n'@{activity('GetMaxLoadTime').output.firstRow.MAXD}'",
+										"type": "Expression"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureDataLakeStoreWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Source",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_Source",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": "@{item().file_name}"
+									}
+								}
+							]
+						},
+						{
+							"name": "CopyFiles",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "CopyTables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "AzureDataLakeStoreReadSettings",
+										"recursive": false,
+										"enablePartitionDiscovery": false
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"preCopyScript": {
+										"value": "TRUNCATE TABLE @{item().sink_table}",
+										"type": "Expression"
+									},
+									"sqlWriterStoredProcedureName": "[dbo].[sp_upsert_customer_table]",
+									"sqlWriterTableType": "DataTypeforCustomerTable",
+									"storedProcedureTableTypeParameterName": "customer_table_src",
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "DS_Source",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": "@{item().file_name}"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "DS_AzureSql",
+									"type": "DatasetReference",
+									"parameters": {
+										"TableName": "@{item().sink_table}",
+										"SP_For_upsert": "@{item().SP_For_upsert}",
+										"SP_Table_Type": "@{item().SP_Table_Type}"
+									}
+								}
+							]
+						},
+						{
+							"name": "UpdateWaterMarkValue",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "CopyFiles",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[pkc_UpdateWatermark]",
+								"storedProcedureParameters": {
+									"id": {
+										"value": {
+											"value": "@{item().id}",
+											"type": "Expression"
+										},
+										"type": "Int16"
+									},
+									"NewWatermark": {
+										"value": {
+											"value": "@{activity('GetMaxLoadTime').output.firstRow.MAXD}",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "AzureDBconn",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			}
+		],
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

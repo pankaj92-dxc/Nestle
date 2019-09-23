@@ -1,0 +1,341 @@
+{
+	"name": "CopyTables_SQL_To_Blob",
+	"properties": {
+		"activities": [
+			{
+				"name": "GetTables",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "SP1_Success",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "SELECT TOP 1 QUOTENAME(table_Schema)+'.'+QUOTENAME(TABLE_NAME) AS Table_Name \n   FROM information_Schema.tables"
+					},
+					"dataset": {
+						"referenceName": "Source",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Copy-Each-Table",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "GetTables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('GetTables').output.value\n",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Copy-Tables",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT * FROM @{item().Table_Name}",
+										"type": "Expression"
+									}
+								},
+								"sink": {
+									"type": "DelimitedTextSink",
+									"storeSettings": {
+										"type": "AzureBlobStorageWriteSettings"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextWriteSettings",
+										"quoteAllText": true,
+										"fileExtension": ".txt"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "Source",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "Sink",
+									"type": "DatasetReference"
+								}
+							]
+						},
+						{
+							"name": "SP2_Activity",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "Copy-Tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[dbo].[SP_ADFActivity_LOG]",
+								"storedProcedureParameters": {
+									"ActivityEndDateUTC": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ActivityID": {
+										"value": {
+											"value": "@activity('Copy-Tables').ActivityRunID",
+											"type": "Expression"
+										},
+										"type": "Guid"
+									},
+									"ActivityStartDateUTC": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ActivityStatus": {
+										"value": {
+											"value": "@if(or(equals(activity('copy-tables').error,'') ,not(equals(activity('copy-tables').error,'') ) ),'success','fail')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"ActivityTask": {
+										"value": "Copy SQL To Blob",
+										"type": "String"
+									},
+									"ActivityType": {
+										"value": "Copy Activity",
+										"type": "String"
+									},
+									"Error": {
+										"value": {
+											"value": "@activity('Copy-Tables').error",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"FileName": {
+										"value": {
+											"value": "@replace(replace(replace(concat(item().Table_Name,'.txt'), '[dbo].', ''), '[', ''), ']', '')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"FileSize": {
+										"value": {
+											"value": "@activity('Copy-Tables').output.dataWritten",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"PipelineRunID": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "Guid"
+									},
+									"Row_count": {
+										"value": {
+											"value": "@activity('Copy-Tables').output.rowsRead",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"TableName": {
+										"value": {
+											"value": "@{item().Table_Name}",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TableSize": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "SqlServer",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "SP1_Success",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[SP_ADFLOG]",
+					"storedProcedureParameters": {
+						"ADFNAME": {
+							"value": {
+								"value": "@pipeline().DataFactory",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PipelineExecEndDateUTC": {
+							"value": null,
+							"type": "DateTime"
+						},
+						"PipelineExecStartDateUTC": {
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"PipelineRunID": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "Guid"
+						},
+						"Status": {
+							"value": "in-progress",
+							"type": "String"
+						},
+						"TriggerType": {
+							"value": {
+								"value": "@pipeline().TriggerName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SqlServer",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "SP1_Failure",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "Copy-Each-Table",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[dbo].[SP_ADFLOG]",
+					"storedProcedureParameters": {
+						"ADFNAME": {
+							"value": {
+								"value": "@pipeline().DataFactory",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PipelineExecEndDateUTC": {
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"PipelineExecStartDateUTC": {
+							"value": null,
+							"type": "DateTime"
+						},
+						"PipelineRunID": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "Guid"
+						},
+						"Status": {
+							"value": "Failure",
+							"type": "String"
+						},
+						"TriggerType": {
+							"value": {
+								"value": "@pipeline().TriggerName",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "SqlServer",
+					"type": "LinkedServiceReference"
+				}
+			}
+		],
+		"annotations": []
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

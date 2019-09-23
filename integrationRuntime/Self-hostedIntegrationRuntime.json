@@ -1,0 +1,7 @@
+{
+	"name": "Self-hostedIntegrationRuntime",
+	"properties": {
+		"type": "SelfHosted",
+		"description": "Copy SQL To cloud"
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"name": "AzureSqlConfig",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureDBconn",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
